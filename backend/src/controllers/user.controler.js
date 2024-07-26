@@ -7,17 +7,24 @@ import { User } from '../model/user.models.js';
 
 // funtion of genrate refreshtoken and access token
 
-const genrateToken=asyncHandler(async(userId)=>{
+const genrateToken=async(userId)=>{
     // find user from database based on userId
-    const user=await User.findById(userId);
-    const accesToken=user.genrateAccesToken();
-    const refreshToken=user.genrateRefreshToken()
-    user.refreshToken=refreshToken;
-    // save the user
-    user.save({validateBeforeSave:false})
-
-    return ({accesToken,refreshToken})
-})
+    try {
+        const user=await User.findById(userId);
+        const accesToken=user.genrateAccesToken();
+        const refreshToken=user.genrateRefreshToken()
+        console.log("accesToken->",accesToken);
+        user.refreshToken=refreshToken;
+        // save the user
+        user.save({validateBeforeSave:false})
+    
+        console.log("i am in genrate token");
+        console.log("accesToken->",accesToken);
+        return ({accesToken,refreshToken})
+    } catch (error) {
+        throw new ApiError(500,error)
+    }
+}
 // Register user controller
 const RegisterUser = asyncHandler(async (req, res) => {
     const { fullName, username, email, password } = req.body;
@@ -80,7 +87,7 @@ const LoginUser=asyncHandler(async(req,res)=>{
    }
  
    // find user by username either email
-  const user= awaitUser.findOne({
+  const user= await User.findOne({
     $or:[{username:identifier},{email:identifier}]
    })
      
@@ -89,7 +96,7 @@ const LoginUser=asyncHandler(async(req,res)=>{
      throw new ApiError(400,"user does't exist create account")
    }
  // call ispassword method to check password is coorect or not
-   const isCorrectPassword=await User.isPasswordCorrect(password)
+   const isCorrectPassword=await user.isPasswordCorrect(password)
 
    if(!isCorrectPassword){
 
@@ -98,11 +105,12 @@ const LoginUser=asyncHandler(async(req,res)=>{
    }
   // genrate accestoken and refreshtoken
 
-  const {refreshToken,accesToken}=await genrateToken(user?._id)
-
+  const {refreshToken,accesToken}=await genrateToken(user._id)
+  console.log("refreshToken after fun call->",refreshToken);
+  console.log("accessToken after fun call->",accesToken);
    // find logeduser and it give an object and without password and refreshtoken
-  const logeduser=await User.findById(user._id).select("-password","-refreshToken")
-
+  const logeduser=await User.findById(user._id).select("-password -refreshToken")
+  console.log("loged user->",logeduser);
   const options={
       httpOnly:true,
       secure:true
@@ -119,13 +127,39 @@ const LoginUser=asyncHandler(async(req,res)=>{
              refreshToken,
              accesToken
         },
-        "account is succefully created"
+        "account is succefully login"
     )
   )
   
 
 })
+
+// logout api
+const userLogout=asyncHandler(async(req,res)=>{
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $unset: {
+                refreshToken: 1 // this removes the field from document
+            }
+        },
+        {
+            new: true
+        }
+    )
+
+    const options={
+        httpOnly:true,
+        secure:true
+    }
+    return res.
+    status(200)
+    .clearCookie("accesToken",options)
+    .clearCookie("refreshToken",options)
+    .json(new ApiResponse(200,{},"Logout succesfully"))
+})
 export {
     RegisterUser,
-    LoginUser
+    LoginUser,
+    userLogout
 };
