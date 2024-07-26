@@ -3,6 +3,7 @@ import { ApiResponse } from '../utils/apiResponse.js';
 import { ApiError } from '../utils/apiError.js';
 import { upploadCloudnary } from '../utils/cloudnary.js';
 import { User } from '../model/user.models.js';
+import jwt from 'jsonwebtoken'
 
 
 // funtion of genrate refreshtoken and access token
@@ -158,8 +159,46 @@ const userLogout=asyncHandler(async(req,res)=>{
     .clearCookie("refreshToken",options)
     .json(new ApiResponse(200,{},"Logout succesfully"))
 })
+
+// Refresh access token api
+const accesRefreshToken=asyncHandler(async()=>{
+    const inCominToken=req.cookies.refreshToken || req.body.refreshToken
+    if(!inCominToken){
+        throw new ApiError(400,"Unauthorize user while genrate refreshToken")
+    }
+    const decodeToken=jwt.verify(inCominToken,process.env.REFRESHTOKEN_KEY)
+    const user=await User.findById(decodeToken?._id)
+
+    // check user refresh token expire or not
+    if(!user){
+        throw new ApiError(401,"refreshToken is expire")
+    }
+
+    const options={
+        httpOnly:true,
+        secure:true
+    }
+
+    const {newAccessToken,newRefreshToken}= await genrateToken(user?._id);
+
+    return res.
+    status(200)
+    .json(
+        new ApiResponse(
+            200,
+            {
+                refreshToken:newRefreshToken,
+                accesToken:newAccessToken
+            },
+            "accessToken and refreshToken is genrated"
+        )
+    )
+
+})
+
 export {
     RegisterUser,
     LoginUser,
-    userLogout
+    userLogout,
+    accesRefreshToken
 };
